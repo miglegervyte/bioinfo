@@ -9,6 +9,6 @@ do
 
 readas=read${NR}.fastq
 
-bwa aln chr.fa $readas | bwa mem chr.fa $readas | awk -F'\t' '$5 != "0"' - | samtools view -b -S - | bedtools bamtobed -i - > mapped-mapq.bed
+bwa aln chr.fa $readas | bwa samse chr.fa - $readas | awk -F'\t' '$5 != "0"' - | samtools view -b -S - | samtools sort | bedtools bamtobed -i - > mapped-mapq.bed
 
 done
