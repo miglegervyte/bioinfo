@@ -1,0 +1,23 @@
+#! /bin/sh 
+
+for i in *.fastq;
+do
+
+cutadapt -a AGATTGGAAGAGTGTCATGTAGGGAAAGAGTG $i | cutadapt -g GTTACATCTGGTAGTCAGTCTCCAATAAATATATAAAA - > cut_${i}
+
+~/Desktop/bioinfo/FastQC/fastqc cut_${i}
+
+fastq_quality_trimmer -t 20 -l 80 -i cut_${i} -o cut_tl_${i}
+
+~/Desktop/bioinfo/FastQC/fastqc cut_tl_${i}
+
+done
+
+for m in *.fa;
+do
+
+bwa index $m
+
+done
+
+bwa aln $m cut_tl_${i} | bwa samse $m - cut_tl_${i} | samtools view -b -S - | bedtools bamtobed -i - > mapped-mapq.bed
