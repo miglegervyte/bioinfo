@@ -1,23 +1,33 @@
 #! /bin/sh 
 
-for i in *.fastq;
+ref=*.fa
+
+for i in Ion*fastq;
 do
 
-cutadapt -a AGATTGGAAGAGTGTCATGTAGGGAAAGAGTG $i | cutadapt -g GTTACATCTGGTAGTCAGTCTCCAATAAATATATAAAA - > cut_${i}
+/home/povilas/tools/fastqc/fastqc $i
 
-~/Desktop/bioinfo/FastQC/fastqc cut_${i}
+ID=$(echo $i | cut -f 2 -d "_")
 
-fastq_quality_trimmer -t 20 -l 80 -i cut_${i} -o cut_tl_${i}
+cutadapt -g GTTACATCTGGTAGTCAGTCTCCAATAAATATATAAAA --discard-untrimmed $i | cutadapt -m 80 - > cut5_${ID}.fastq
 
-~/Desktop/bioinfo/FastQC/fastqc cut_tl_${i}
+/home/povilas/tools/fastqc/fastqc cut5_${ID}.fastq
+
+cutadapt -a AGATTGGAAGAGTGTCATGTAGGGAAAGAGTG cut5_${ID}.fastq > cut5_3_${ID}.fastq
+
+/home/povilas/tools/fastqc/fastqc cut5_3_${ID}.fastq
+
+/home/povilas/tools/fastx/fastq_quality_trimmer -t 20 -l 80 -Q33 -i cut5_3_${ID}.fastq -o cut5_3_qt_${ID}.fastq
+
+/home/povilas/tools/fastqc/fastqc cut5_3_qt_${ID}.fastq
 
 done
 
-for m in *.fa;
+bwa index $ref
+
+for i in cut5_3_qt_*fastq;
 do
 
-bwa index $m
+bwa mem $ref $i | samtools view -b -S - | bedtools bamtobed -i - > mapped${i}.bed
 
 done
-
-bwa aln $m cut_tl_${i} | bwa samse $m - cut_tl_${i} | samtools view -b -S - | bedtools bamtobed -i - > mapped-mapq.bed
