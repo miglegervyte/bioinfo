@@ -19,6 +19,7 @@ pathBED <- "./"
 ########################################
 
 library(data.table)
+library(foreach)
 library(ggplot2)
 library(dplyr)
 library(fst)
@@ -71,7 +72,7 @@ if (!file.exists("CG.bed")) {
 files <- list.files(pattern = ".*Ion.*bed")
 
 dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
-    ID <- paste0("Sample_", strsplit(i, "_")[[1]][3])
+    ID <- paste0("Sample_", strsplit(i, "_")[[1]][5])
     print(ID)
     dOrig <- fread(i) %>%
         setnames(c("chr", "start", "end", "ID", "mq", "strand"))
@@ -96,6 +97,9 @@ dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
 }
 
 
+
+
+
 ################################################################################
 #
 #                              MAPPING STATS
@@ -107,61 +111,57 @@ dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
 # MQ
 ########################################
 
-files <- list.files(pattern = ".*Ion.*bed")
+files <- list.files(pattern = ".*MQ.*RDS")
 
 dMQ <- foreach(i = files, .combine = rbind) %do% {
-    ID <- sub("_.*", "", sub(".*_0", "S", i))
-    readRDS(paste0("MQ_", ID, ".RDS"))[, .(ID, quality)]
+    readRDS(i)
 }
 
-ggplot(dMQ, aes(quality, color = ID)) +
-    geom_density() +
-    labs(x = "Mapping Quality",
-         title = "Mapping Quality (sample ID)") +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
-
-ggplot(dMQ, aes(quality, color = ID)) +
-    labs(x = "Mapping Quality",
-         title = "Mapping Quality (sample ID)") + 
-    theme_classic() +
-    geom_histogram()
-
-ggplot(dMQ, aes(quality, fill = ID)) +
-    labs(x = "Mapping Quality",
-         title = "Mapping Quality (sample ID)") + 
-    theme_classic() +
-    geom_bar()
-
-ggplot(dMQ, aes(ID, quality, fill = ID)) +
-    geom_boxplot() + 
-    labs(x = "Sample ID",
-         y = "Mapping Quality",
-         title = "Mapping Quality (sample ID)") +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
+# ggplot(dMQ, aes(quality, color = ID)) +
+#     geom_density() +
+#     labs(x = "Mapping Quality",
+#          title = "Mapping Quality (sample ID)") +
+#     theme_classic() +
+#     scale_fill_brewer(palette = "Dark2")
 
 
+# ggplot(dMQ, aes(quality, color = ID)) +
+#     labs(x = "Mapping Quality",
+#          title = "Mapping Quality (sample ID)") + 
+#     theme_classic() +
+#     geom_histogram()
 
-dMQ <- foreach(i = files, .combine = rbind) %do% {
-    ID <- sub("_.*", "", sub(".*_0", "S", i))
-    readRDS(paste0("MQ_", ID, ".RDS"))[, .(ID, strand, quality, chr)]
-}
-ggplot(dMQ, aes(strand, quality, fill = ID)) +
-    geom_boxplot() +
-    labs(y = "Mapping Quality",
-         x = "Strand", 
-         title = "Mapping Quality (sample ID, strand)") +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
+# ggplot(dMQ, aes(quality, fill = ID)) +
+#     labs(x = "Mapping Quality",
+#          title = "Mapping Quality (sample ID)") + 
+#     theme_classic() +
+#     geom_bar()
 
-ggplot(dMQ, aes(chr, quality, fill = ID)) +
-    geom_boxplot() +
-    labs(y = "Mapping Quality",
-         x = "Chromosome", 
-         title = "Mapping Quality (sample ID, chromosome)") +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
+# ggplot(dMQ, aes(ID, quality, fill = ID)) +
+#     geom_boxplot() + 
+#     labs(x = "Sample ID",
+#          y = "Mapping Quality",
+#          title = "Mapping Quality (sample ID)") +
+#     theme_classic() +
+#     scale_fill_brewer(palette = "Dark2")
+
+
+# p <- ggplot(dMQ, aes(strand, quality, fill = ID)) +
+#     geom_boxplot() +
+#     labs(y = "Mapping Quality",
+#          x = "Strand", 
+#          title = "Mapping Quality (sample ID, strand)") +
+#     theme_classic() +
+#     scale_fill_brewer(palette = "Dark2")
+# ggsave("~/tmp.pdf", p)
+
+# ggplot(dMQ, aes(chr, quality, fill = ID)) +
+#     geom_boxplot() +
+#     labs(y = "Mapping Quality",
+#          x = "Chromosome", 
+#          title = "Mapping Quality (sample ID, chromosome)") +
+#     theme_classic() +
+#     scale_fill_brewer(palette = "Dark2")
 
 
 
