@@ -8,6 +8,7 @@
 # Arguments
 ########################################
 
+distanceToCG <- 0
 # Mapping quality
 MQ <- 30
 # Path
@@ -27,7 +28,7 @@ library(fst)
 
 ################################################################################
 #
-#                                 FUNCTIONCS
+#                                 FUNCTIONS
 #
 ################################################################################
 
@@ -76,6 +77,7 @@ dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
     print(ID)
     dOrig <- fread(i) %>%
         setnames(c("chr", "start", "end", "ID", "mq", "strand"))
+    # Perkelto chr filtravima cia!!!
     saveRDS(dOrig[, .N, .(chr, strand, mq)], 
             paste0("stats_MQ_", ID, ".RDS"), compress = FALSE)
     dOrig %>%
@@ -90,7 +92,7 @@ dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
         .[, ID := ID] %>%
         writeBed("starts")
     dDistance <- fread("bedtools closest -a starts.bed -b CG.bed -d")
-    saveRDS(dDistance[, .N, .(strand = V4, distance = V9)], 
+    saveRDS(dDistance[, .N, .(chr = V1, strand = V4, distance = V9)], 
         paste0("stats_Distance_", ID, ".RDS"), compress = FALSE)
     foo <- dDistance[V9 <= 0, .N, .(chr = V6, start = V7)]
     merge(dCG, foo, c("chr", "start"), all.x = TRUE)[is.na(N), N := 0]$N
@@ -111,19 +113,19 @@ dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
 # MQ
 ########################################
 
-files <- list.files(pattern = ".*MQ.*RDS")
+files <- list.files(pattern = ".*stats.*MQ.*RDS")
 
 dMQ <- foreach(i = files, .combine = rbind) %do% {
-    readRDS(i)
+    ID <- sub(".RDS", "", paste0("Sample_", strsplit(i, "_")[[1]][4]))
+    readRDS(i)[, ID := ID]
 }
 
-# ggplot(dMQ, aes(quality, color = ID)) +
-#     geom_density() +
-#     labs(x = "Mapping Quality",
-#          title = "Mapping Quality (sample ID)") +
-#     theme_classic() +
-#     scale_fill_brewer(palette = "Dark2")
-
+ggplot(dMQ, aes(mq, N, color = ID)) +
+    geom_smooth(se = FALSE)
+    # labs(x = "Mapping Quality",
+    #      title = "Mapping Quality (sample ID)") +
+    # theme_classic() +
+    # scale_fill_brewer(palette = "Dark2")
 
 # ggplot(dMQ, aes(quality, color = ID)) +
 #     labs(x = "Mapping Quality",
@@ -169,96 +171,94 @@ dMQ <- foreach(i = files, .combine = rbind) %do% {
 # Number of reads
 ########################################
 
-pd <- dStarts[, .N, ID]
-ggplot(pd, aes(ID, N)) +
-    geom_bar(stat = "identity", position = "dodge") +
-labs(x = "Sample ID",
-     y = "Number of reads",
-     title = "Number of reads (sample ID)") +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
+files <- list.files(pattern = ".*stats.*Distance.*RDS")
+dMQ <- foreach(i = files, .combine = rbind) %do% {
+    ID <- sub(".RDS", "", paste0("Sample_", strsplit(i, "_")[[1]][4]))
+    readRDS(i)[, ID := ID]
+}
 
-pchr <- dStarts[, .N, chr]
-ggplot(pchr, aes(chr, N)) +
+
+pd <- dMQ[, sum(N), ID]
+p <- ggplot(pd, aes(ID, V1)) +
     geom_bar(stat = "identity", position = "dodge") +
-    labs(x = "Chromosome",
+    labs(x = "Sample ID",
          y = "Number of reads",
-         title = "Number of reads (chromosome)") +
+         title = "Number of reads",
+         subtitle = "Per sample") +
     theme_classic() +
     scale_fill_brewer(palette = "Dark2")
 
-pstrand <- dStarts[, .N, strand]
-ggplot(pstrand, aes (strand, N)) +
+ggplot(pd, aes(ID, V1, fill = strand)) +
     geom_bar(stat = "identity", position = "dodge") +
-    labs(x = "Strand",
+    labs(x = "Sample ID",
          y = "Number of reads",
-         title = "Number of reads (strand)") +
+         title = "Number of reads",
+         subtitle = "Per sample") +
     theme_classic() +
     scale_fill_brewer(palette = "Dark2")
 
 
-################################################################################
-#
-#                               MAP TO CG
-#
-################################################################################
+dMQ[, .N, .(ID, chr)] %>%
+    ggplot(aes(ID, N, group = chr)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        labs(x = "Chromosome",
+             y = "Number of reads",
+             title = "Number of reads (chromosome)") +
+        theme_classic() +
+        scale_fill_brewer(palette = "Dark2")
 
-dCG <- fread(pathCG)
-# Distance from read (for each read) start to CG
 
-write.table(dStarts, "starts.bed",
-          quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
-write.table(dCG, "CG.bed",
-          quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
-
-system("bedtools sort -i CG.bed > CG2.bed")
-
-dDistance <- fread("bedtools closest -a starts.bed -b CG2.bed -d") %>%
-    .[V6 != -1] %>%
-    setnames(c(colnames(dStarts), colnames(dCG), "distance"))
 
 ########################################
 # Distance to CG
 ########################################
-# per strand
-
-#Signal (coverage) statistics 2.1 Correlation 2.1.1 Values 2.1.2 Heatmap 2.1.3 Scatter plot 2.2 Profile per genome
-
-ggplot(dDistance, aes(x = distance)) +
+p <-  ggplot(dMQ, aes(distance, color = ID)) +
     labs(x = "Distance",
          y = "Number of reads",
          title = "Distance to CG") +
     theme_classic() +
-    geom_histogram()
+    facet_wrap(~ strand) +
+    geom_density()
 
-ggplot(dDistance, aes(distance, fill = strand)) +
-    labs(x = "Distance",
-         y = "Number of reads",
-         title = "Distance to CG") +
-    geom_bar()
 
-ggplot(dDistance, aes(distance, fill = chr)) +
-    labs(x = "Distance",
-         y = "Number of reads",
-         title = "Distance to CG") +
-    geom_bar()
+dMQ[, distanceGroup := "0"]
+dMQ[distance > 0 & distance <= 5, distanceGroup := "1-5"]
+dMQ[distance > 5 , distanceGroup := "6-Inf"]
 
-ggplot(dDistance, aes(distance, color = strand)) +
-    labs(x = "Distance",
-         y = "Density",
-         title = "Distance to CG") +
-    geom_density() +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
+p1 <- dMQ[, sum(N), .(distanceGroup, ID)] %>%
+    ggplot(aes(distanceGroup, V1, fill = ID)) +
+        geom_bar(stat = "identity", position = "dodge",
+                 color = "black", width = 0.8) +
+        labs(title = "Distance to CG",
+             x = "Distance",
+             y = "Number of reads",
+             fill = "Sample") +
+        scale_x_discrete(limits = c("0", "1-5", "6-Inf")) +
+        scale_fill_brewer(palette = "Dark2") +
+        theme_classic()
 
-ggplot(dDistance, aes(log(distance), color = strand)) +
-    geom_density() +
-    theme_classic() +
-    scale_fill_brewer(palette = "Dark2")
+foo <- dMQ[, sum(N), .(distanceGroup, ID)]
+bar <- dMQ[, sum(N), ID]
+p2 <- merge(foo, bar, c("ID"))[, per := V1.x * 100/ V1.y] %>%
+    ggplot(aes(distanceGroup, per, fill = ID)) +
+        geom_bar(stat = "identity", position = "dodge",
+                 color = "black", width = 0.8) +
+        labs(title = "Distance to CG",
+             x = "Distance",
+             y = "Number of reads",
+             fill = "Sample") +
+        scale_x_discrete(limits = c("0", "1-5", "6-Inf")) +
+        scale_fill_brewer(palette = "Dark2") +
+        scale_y_continuous(limits = c(0, 100)) +
+        theme_classic()
 
-################################################################################
-#
-#                               COVERAGE PER CG
-#
-################################################################################
+ggsave("~/tmp.pdf", p2)
+
+
+
+
+
+
+
+
 
