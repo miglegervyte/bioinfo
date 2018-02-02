@@ -11,7 +11,7 @@
 # Mapping quality
 MQ <- 30
 # Path
-pathCG <- "~/Desktop/bioinfo/Coprinopsis/naujas/bed_html/CG.bed"
+pathCG <- "../genome/CG.RDS"
 pathBED <- "./"
 
 ########################################
@@ -24,6 +24,28 @@ library(dplyr)
 library(fst)
 
 
+################################################################################
+#
+#                                 FUNCTIONCS
+#
+################################################################################
+
+
+########################################
+# Write BED 
+########################################
+
+writeBed <- function(data, name) {
+    library(data.table)
+    setDT(data)
+    write.table(setkey(data, chr, start, end), 
+                paste0(name, ".bed"), quote = FALSE, sep = "\t", 
+                col.names = FALSE, row.names = FALSE)
+}
+
+
+
+
 
 ################################################################################
 #
@@ -31,31 +53,47 @@ library(fst)
 #
 ################################################################################
 
+
+########################################
+# CG
+########################################
+
+dCG <- setDT(readRDS(pathCG))
+if (!file.exists("CG.bed")) {
+    writeBed(dCG, "CG")
+}
+
+
 ########################################
 # Load BED files
 ########################################
 
-setwd("~/Desktop/bioinfo/Coprinopsis/naujas/bed_html")
+files <- list.files(pattern = ".*Ion.*bed")
 
-files <- list.files(pattern = "bed$")
-
-# for(i in files) {
-library(foreach)
-dStarts <- foreach(i = files, .combine = rbind) %do% {
-    ID <- sub("_.*", "", sub(".*_0", "S", i))
-    d <- i %>%
-        fread(nrows = 100) %>%
-            .[, "V4" := NULL] %>%
-        setnames(c("chr", "start", "end", "quality", "strand")) %>%
+dCoverage <- foreach(i = files[1:2], .combine = cbind) %do% {
+    ID <- paste0("Sample_", strsplit(i, "_")[[1]][3])
+    print(ID)
+    dOrig <- fread(i) %>%
+        setnames(c("chr", "start", "end", "ID", "mq", "strand"))
+    saveRDS(dOrig[, .N, .(chr, strand, mq)], 
+            paste0("stats_MQ_", ID, ".RDS"), compress = FALSE)
+    dOrig %>%
+        .[mq > MQ] %>%
         .[, chr := sub("Chr_", "chr", chr)] %>%
-        .[grep("^chr", chr)]
-    saveRDS(d[, .(quality, strand, chr, ID)], paste0("MQ_", ID, ".RDS"))
-
-    d[quality >= MQ] %>%
-        .[, coord := ifelse(strand == "+", start, end)] %>%
-        .[, .(chr, start = coord, end = coord + 1, ID, strand)]
+        .[grep("chr", chr)] %>%
+        # PADARYTI A
+        # .[, .(chr, start = ifelse(strand == "+", start, end), strand, ID)] %>%
+        .[, .(chr, start = ifelse(strand == "+", start, end), strand)] %>%
+        .[, end := start + 1] %>%
+        .[, .(chr, start, end, strand, ID)] %>%
+        .[, ID := ID] %>%
+        writeBed("starts")
+    dDistance <- fread("bedtools closest -a starts.bed -b CG.bed -d")
+    saveRDS(dDistance[, .N, .(strand = V4, distance = V9)], 
+        paste0("stats_Distance_", ID, ".RDS"), compress = FALSE)
+    foo <- dDistance[V9 <= 0, .N, .(chr = V6, start = V7)]
+    merge(dCG, foo, c("chr", "start"), all.x = TRUE)[is.na(N), N := 0]$N
 }
-setkey(dStarts, chr, start, end, strand)
 
 
 ################################################################################
@@ -65,13 +103,11 @@ setkey(dStarts, chr, start, end, strand)
 ################################################################################
 
 
-# Mapping statistics; 
-# 1.1 MQ 
-# 1.2 n of reads (per chr, strand) ...
-
 ########################################
 # MQ
 ########################################
+
+files <- list.files(pattern = ".*Ion.*bed")
 
 dMQ <- foreach(i = files, .combine = rbind) %do% {
     ID <- sub("_.*", "", sub(".*_0", "S", i))
